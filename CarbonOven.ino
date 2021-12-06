@@ -44,9 +44,7 @@ void setup(void)
 void loop(void) {
   // here is where you'd put code that needs to be running all the time.
 
-  // check to see if it's time to blink the LED; that is, if the difference
-  // between the current time and last time you blinked the LED is bigger than
-  // the interval at which you want to blink the LED.
+  // check to see if it's time to read out the temp
   unsigned long currentMillis = millis();
 
   if (currentMillis - previousMillis >= interval) {
@@ -57,33 +55,52 @@ void loop(void) {
     
     // Why "byIndex"? You can have more than one IC on the same bus. 0 refers to the first IC on the wire
 
+    float temps[] = {
+      sensors.getTempFByIndex(0),
+      sensors.getTempFByIndex(1),
+      sensors.getTempFByIndex(2),
+      sensors.getTempFByIndex(3)
+    };
 
-    float t1 = sensors.getTempFByIndex(0);
-    float t2 = sensors.getTempFByIndex(1);
-    float t3 = sensors.getTempFByIndex(2);
-    float t4 = sensors.getTempFByIndex(3);
-    //float avg = (t1 + t2 + t3 + t4)/4;
+    float maxt = 0;
+    float sum = 0;
+    for (int i = 0; i < sizeof(temps) / sizeof(temps[0]); ++i){
+        sum += temps[i];
+        if (temps[i] > maxt){
+          maxt = temps[i];
+        }
+        else if (temps[i] < 0){
+          //Sensor malfunction??
+          // Handle this case gracefully by just using other sensors?
+          Serial.print("Sensor ");
+          Serial.print(i);
+          Serial.println(" reads negative temperatures and is likely malfunctioning.")
 
-    float avg = t1; // Only using 1 for now
+        }
+    }
 
-    Serial.print(t1);
+    float avg = sum/(sizeof(temps)/ sizeof(temps[0]));
+
+    Serial.print(temps[0]);
     Serial.print("\t");
     
-    Serial.print(t2);
+    Serial.print(temps[1]);
     Serial.print("\t");
    
-    Serial.print(t3);
+    Serial.print(temps[2]);
     Serial.print("\t");
     
-    Serial.print(t4);
+    Serial.print(temps[3]);
     Serial.print("\t");
     Serial.println(avg);
 
     
 
-    if (avg > 110){
+    if (maxt > 115){
+      // Writing HIGH turns the relay off
       digitalWrite(heatpin, HIGH);
     } else if (avg < 105){
+      // While writing low turns the relay on
       digitalWrite(heatpin, LOW); 
     }
   }
