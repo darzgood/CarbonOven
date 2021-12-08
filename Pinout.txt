@@ -1,0 +1,8 @@
+9, 10, 11 RGB
+D3: Heat
+D4: Motor
+
+D2: On/off - interupt enabled
+
+A1, A2: Temperature control, Timer
+A4, A5: I2c Clock, Data
