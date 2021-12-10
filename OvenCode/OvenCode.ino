@@ -29,7 +29,8 @@ LiquidCrystal_I2C lcd(0x27, 16, 2); // I2C address 0x27, 16 column and 2 rows
 
 //---------------------------------------------------------------------------------------
 #define STARTSTOP_PIN 2
-#define HEATWIRE_PIN 3
+#define HEATWIRE_1_PIN 3
+//#define HEATWIRE_2_PIN 6
 #define MOTOR_PIN 4
 
 #define R_LED 9
@@ -43,6 +44,7 @@ LiquidCrystal_I2C lcd(0x27, 16, 2); // I2C address 0x27, 16 column and 2 rows
 #define UPDATE_TIME 500
 #define POT_THRESHOLD 10
 
+#define RELAY_DELAY 500
 
 //---------------------------------------------------------------------------------------
 // Error is 0
@@ -50,7 +52,8 @@ LiquidCrystal_I2C lcd(0x27, 16, 2); // I2C address 0x27, 16 column and 2 rows
 #define HEATING 2
 #define COOLING 3
 int state = 1;
- 
+
+#define COOLING_TEMP 80
 //---------------------------------------------------------------------------------------
 
 
@@ -85,7 +88,8 @@ void setup() {
   pinMode(STARTSTOP_PIN, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(STARTSTOP_PIN), start_stop_handler, CHANGE);
 
-  pinMode(HEATWIRE_PIN, OUTPUT);
+  pinMode(HEATWIRE_1_PIN, OUTPUT);
+  //pinMode(HEATWIRE_2_PIN, OUTPUT);
   pinMode(MOTOR_PIN, OUTPUT);
   pinMode(R_LED, OUTPUT);
   pinMode(G_LED, OUTPUT);
@@ -151,6 +155,7 @@ void loop() {
       state = COOLING;
     }
     updateHeaters();
+    delay(RELAY_DELAY);
     motorON();
   }
   //--------------------------------------------------------------------------
@@ -158,7 +163,7 @@ void loop() {
     heatersOFF();
     updateChamberTemp();
     displayCurrentState();
-    if (chamber_temp < 100) {
+    if (chamber_temp < COOLING_TEMP) {
       state = STANDBY;
     }
   }
@@ -301,11 +306,17 @@ void updateHeaters() {
 }
 
 void heatersON() {
-  digitalWrite(HEATWIRE_PIN, LOW);
+  digitalWrite(HEATWIRE_1_PIN, HIGH);
+  //delay(RELAY_DELAY);
+  //digitalWrite(HEATWIRE_2_PIN, LOW);
+  //delay(RELAY_DELAY);
 }
 
 void heatersOFF() {
-  digitalWrite(HEATWIRE_PIN, HIGH);
+  digitalWrite(HEATWIRE_1_PIN, LOW);
+  //delay(RELAY_DELAY);
+  //digitalWrite(HEATWIRE_2_PIN, HIGH);
+  //delay(RELAY_DELAY);
 }
 
 void motorON() {
