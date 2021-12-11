@@ -42,6 +42,7 @@ LiquidCrystal_I2C lcd(0x27, 16, 2); // I2C address 0x27, 16 column and 2 rows
 
 //---------------------------------------------------------------------------------------
 #define UPDATE_TIME 500
+#define DATA_OUT_TIME 60000
 #define POT_THRESHOLD 10
 
 #define RELAY_DELAY 500
@@ -69,11 +70,15 @@ bool pressed = 0;
 unsigned long last_button_time = 0;
 bool last_interrupt_state = HIGH;
 
+int prev_chamber_temp = 0;
 int chamber_temp = 0;
+float temps[] = {0,0,0};
+
 long eta = 0;
 unsigned long started_at = 0;
 
 unsigned long last_read = 0;
+unsigned long last_data_out = 0;
 
 void setup() {  
   heatersOFF();
@@ -83,7 +88,6 @@ void setup() {
   Serial.begin(9600);
   // Start up the library
   sensors.begin();
-  sensors.requestTemperatures();
 
   pinMode(STARTSTOP_PIN, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(STARTSTOP_PIN), start_stop_handler, CHANGE);
@@ -115,8 +119,6 @@ void setup() {
 void loop() {
   // put your main code here, to run repeatedly:
   delay(5);
-  Serial.print(state);
-  Serial.println(pressed);
 
   // Reset the button
   if (pressed && millis() - last_button_time > 50 && last_interrupt_state) {
@@ -137,6 +139,7 @@ void loop() {
   }
 
   updateLED();
+  logData();
   
   //--------------------------------------------------------------------------
   if (state == STANDBY){
@@ -169,9 +172,22 @@ void loop() {
   }
 }
 
+void logData() {
+  if (millis() - last_data_out > DATA_OUT_TIME) {
+    getChamberTemps();
+    Serial.print(temps[0]);
+    Serial.print("\t");
+    Serial.print(temps[1]);
+    Serial.print("\t");
+    Serial.println(temps[2]);
+    last_data_out = millis();
+  }
+}
+
 void updateChamberTemp() {
   if (millis() - last_read > UPDATE_TIME) {
-    chamber_temp = getChamberTemp();
+    prev_chamber_temp = chamber_temp;
+    chamber_temp = estimateTempAtMandrel();
     last_read = millis();
   }
 }
@@ -263,20 +279,24 @@ void displayCurrentState() {
   lcd.print(eta_sec);
 }
 
-int getChamberTemp(){
+void getChamberTemps() {
   // Call sensors.requestTemperatures() to issue a global temperature and Requests to all devices on the bus
   sensors.requestTemperatures(); 
     
   // Why "byIndex"? You can have more than one IC on the same bus. 0 refers to the first IC on the wire
+  temps[0] = sensors.getTempFByIndex(0);
+  temps[1] = sensors.getTempFByIndex(1);
+  temps[2] = sensors.getTempFByIndex(2);
 
-  float temps[] = {
-    sensors.getTempFByIndex(0),
-    sensors.getTempFByIndex(1),
-    sensors.getTempFByIndex(2)
-  };
+}
+float getMaxChamberTemp(){
+  getChamberTemps();
+  
+  float sum = 0;
+  float avg = sum/(sizeof(temps)/ sizeof(temps[0]));
+  float avg_rounded = ((int) (avg * 10.0 + 0.5) / 10.0);
 
   float maxt = 0;
-  float sum = 0;
   for (int i = 0; i < sizeof(temps) / sizeof(temps[0]); ++i){
       sum += temps[i];
       if (temps[i] > maxt){
@@ -293,16 +313,38 @@ int getChamberTemp(){
         //lcd.print(i);
       }
   }
+  return maxt;
+}
 
-  float avg = sum/(sizeof(temps)/ sizeof(temps[0]));
-  float avg_rounded = ((int) (avg * 10.0 + 0.5) / 10.0);
+int estimateTempAtMandrel() {
+  // Since we can't measure the temperature right at the mandrel
+  // estimate what it should be based on empirical testing
+  
+  float maxRead = getMaxChamberTemp();
+  
+  #define ROOM_TEMP  75
+  #define MEASURED_MAX  121   // 
+  #define ACTUAL_MAX  134     // Measured with external tooling
 
-  return round(maxt);
+  // The offset is approximately linear, but varies with cycle time:
+  float guessTemp = (maxRead - ROOM_TEMP) * (ACTUAL_MAX - ROOM_TEMP)/(MEASURED_MAX - ROOM_TEMP) + ROOM_TEMP;
+  return round(guessTemp);
 }
 
 void updateHeaters() {
-  if (chamber_temp < max_temp) heatersON();
-  else if (chamber_temp > max_temp) heatersOFF();
+  #define OVERSHOOT_OFFSET 6 //
+  if (prev_chamber_temp < chamber_temp) {
+    // Temp rising:
+    if (chamber_temp > max_temp - OVERSHOOT_OFFSET) heatersOFF();
+  } else {
+    // Temp falling:
+    if (chamber_temp < max_temp ) heatersON();
+  }
+
+  if (chamber_temp > max_temp) {
+    heatersOFF();
+    Serial.println("Max temp overshot!!");
+  }
 }
 
 void heatersON() {
