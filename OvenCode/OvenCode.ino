@@ -173,6 +173,7 @@ void loop() {
 }
 
 void logData() {
+   
   if (millis() - last_data_out > DATA_OUT_TIME) {
     getChamberTemps();
     Serial.print(temps[0]);
@@ -180,7 +181,8 @@ void logData() {
     Serial.print(temps[1]);
     Serial.print("\t");
     Serial.println(temps[2]);
-    last_data_out = millis();
+    if (last_data_out = 0) last_data_out = millis();
+    else last_data_out = last_data_out + DATA_OUT_TIME;
   }
 }
 
